@@ -19,26 +19,10 @@
 
 namespace SKIPLIST {
 
-constexpr uint16_t kMaxHeight_ = 12;
-constexpr uint16_t kBranching_ = 4;
-constexpr uint32_t kScaledInverseBranching_ = (1ul << 30) / (kBranching_);
-constexpr uint64_t SEGMENT_SIZE = 1024;
-constexpr uint64_t SLOT_PER_SEG =
-    ((SEGMENT_SIZE) / (sizeof(uint64_t) + sizeof(uint8_t)));
-constexpr uint64_t SLOT_BATCH_SIZE = 8;
-constexpr uint64_t RETRY_LIMIT =
-    (SLOT_PER_SEG / SLOT_BATCH_SIZE);  // TODO : 后期试试改成其他较小的值
-constexpr uint64_t MAX_MAIN_SIZE = 64 * SLOT_PER_SEG;
-constexpr uint64_t MAX_FP_INFO = 256;
-constexpr uint64_t INIT_DEPTH = 4;
-constexpr uint64_t MAX_DEPTH = 16;
-constexpr uint64_t DIR_SIZE = (1 << MAX_DEPTH);
-constexpr uint64_t ALIGNED_SIZE =
-    64;  // aligned size of len bitfield in DepSlot
-constexpr uint64_t dev_mem_size = (1 << 10) * 64;  // 64KB的dev mem，用作lock
-constexpr uint64_t num_lock =
-    (dev_mem_size - sizeof(uint64_t)) /
-    sizeof(uint64_t);  // Lock数量，client对seg_id使用hash来共享lock
+constexpr uint64_t kMaxHeight_ = 12;
+constexpr uint64_t kBranching_ = 4;
+constexpr uint64_t kScaledInverseBranching_ = (1ul << 30) / (kBranching_);
+constexpr uint64_t ALIGNED_SIZE = 64;
 
 class Client : public BasicDB {
  public:
@@ -52,12 +36,15 @@ class Client : public BasicDB {
 
   ~Client();
 
-  task<int32_t> NodeKey(uintptr_t node);
+  task<> start(uint64_t total);
 
-  task<int32_t> NodeValue(uintptr_t node);
+  task<> stop();
 
-  Node* AllocateKeyAndValue(const int32_t key, const int32_t value,
-                            Client* cli);
+  task<int64_t> NodeKey(uintptr_t node);
+
+  task<int64_t> NodeValue(uintptr_t node);
+
+  Node* AllocateKeyAndValue(const int64_t key, const int64_t value);
 
   Splice* AllocateSpliceOnHeap();
 
@@ -65,21 +52,22 @@ class Client : public BasicDB {
 
   task<bool> InsertConcurrently(Node* x);
 
-  task<bool> Client::Insert(Node* x, Splice* splice,
-                            bool allow_partial_splice_fix);
+  task<bool> Insert(int64_t key, int64_t value);
 
-  task<uintptr_t> Search(const int32_t key);
+  task<bool> Insert(Node* x, Splice* splice, bool allow_partial_splice_fix);
+
+  task<uintptr_t> Search(const int64_t key);
 
   task<> Print();
 
  private:
-  task<uint16_t> GetMaxHeight(uint64_t raddr);
+  task<uint64_t> GetMaxHeight(uintptr_t raddr);
 
   int RandomHeight();
 
   uintptr_t GetHead();
 
-  Client::Node* Client::AllocateNode(const int32_t key, const int32_t value,
+  Client::Node* Client::AllocateNode(const int64_t key, const int64_t value,
                                      const int height);
 
   task<uintptr_t> NodeNext(uintptr_t node, int n);
@@ -89,21 +77,21 @@ class Client : public BasicDB {
   task<bool> NodeCASNext(uintptr_t node, int n, uintptr_t expected,
                          uintptr_t* x);
 
-  bool Equal(const int32_t& a, const int32_t& b) const;
+  bool Equal(const int64_t& a, const int64_t& b) const;
 
-  bool LessThan(const int32_t& a, const int32_t& b) const;
+  bool LessThan(const int64_t& a, const int64_t& b) const;
 
-  task<bool> KeyIsAfterNode(const int32_t key, uintptr_t node);
+  task<bool> KeyIsAfterNode(const int64_t key, uintptr_t node);
 
-  task<bool> KeyIsBeforeNode(const int32_t key, uintptr_t node);
+  task<bool> KeyIsBeforeNode(const int64_t key, uintptr_t node);
 
-  task<uintptr_t> FindGreaterOrEqual(const int32_t key);
+  task<uintptr_t> FindGreaterOrEqual(const int64_t key);
 
-  task<> FindSpliceForLevel(const int32_t key, uintptr_t before,
+  task<> FindSpliceForLevel(const int64_t key, uintptr_t before,
                             uintptr_t after, int level, uintptr_t* out_prev,
                             uintptr_t* out_next);
 
-  task<> RecomputeSpliceLevels(const int32_t key, Splice* splice,
+  task<> RecomputeSpliceLevels(const int64_t key, Splice* splice,
                                int recompute_level);
 
  private:
@@ -137,16 +125,16 @@ struct Client::Splice {
 };
 
 struct Client::Node {
-  void StashHeight(const uint16_t height);
+  void StashHeight(const uint64_t height);
 
-  uint16_t UnstashHeight() const;
+  uint64_t UnstashHeight() const;
 
-  int32_t* Key() const;
+  int64_t* Key() const;
 
-  int32_t* Value() const;
+  int64_t* Value() const;
 
  private:
-  uint64_t next_[1];
+  uintptr_t next_[1];
 };
 
 class Server : public BasicDB {

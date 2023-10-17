@@ -7,32 +7,20 @@ namespace SKIPLIST {
 
 Server::Server(Config& config) : dev(nullptr, 1, config.roce_flag), ser(dev) {
   seg_mr = dev.reg_mr(233, config.mem_size);
-  auto [dm, mr] = dev.reg_dmmr(234, dev_mem_size);
-  lock_dm = dm;
-  lock_mr = mr;
-
   alloc.Set((char*)seg_mr->addr, seg_mr->length);
   Init();
   log_err("init");
-
-  // Init locks
-  char tmp[dev_mem_size] = {};  // init locks to zero
-  lock_dm->memcpy_to_dm(lock_dm, 0, tmp, dev_mem_size);
-  log_err("memset");
-
   ser.start_serve();
 }
 
 void Server::Init() {
-  char* raw = alloc.alloc(sizeof(uint16_t) + sizeof(uintptr_t) * (kMaxHeight_));
-  memset(raw, 0, sizeof(uint16_t) + sizeof(uintptr_t) * (kMaxHeight_));
-  *reinterpret_cast<uint16_t*>(raw) = 1;
+  char* raw =
+      alloc.alloc(2 * sizeof(int64_t) + sizeof(uintptr_t) * kMaxHeight_);
+  memset(raw, 0, 2 * sizeof(int64_t) + sizeof(uintptr_t) * kMaxHeight_);
+  *reinterpret_cast<uint64_t*>(raw) = 1;
 }
 
-Server::~Server() {
-  rdma_free_mr(seg_mr);
-  rdma_free_dmmr({lock_dm, lock_mr});
-}
+Server::~Server() { rdma_free_mr(seg_mr); }
 
 Client::Client(Config& config, ibv_mr* _lmr, rdma_client* _cli,
                rdma_conn* _conn, rdma_conn* _wowait_conn, uint64_t _machine_id,
@@ -54,7 +42,7 @@ Client::Client(Config& config, ibv_mr* _lmr, rdma_client* _cli,
   // alloc info
   alloc.Set((char*)lmr->addr, lmr->length);
   seg_rmr = cli->run(conn->query_remote_mr(233));
-  uint64_t rbuf_size = (seg_rmr.rlen - (1ul << 20) * 200) /
+  uint64_t rbuf_size = (seg_rmr.rlen - (1ul << 20)) /
                        (config.num_machine * config.num_cli *
                         config.num_coro);  // 头部保留5GB，其他的留给client
   uint64_t buf_id = config.machine_id * config.num_cli * config.num_coro +
@@ -77,47 +65,76 @@ Client::~Client() {
   sum_cost.print(cli_id, coro_id);
 }
 
-void Client::Node::StashHeight(const uint16_t height) {
+task<> Client::start(uint64_t total) {
+  uint64_t* start_cnt = (uint64_t*)alloc.alloc(sizeof(uint64_t), true);
+  *start_cnt = 0;
+  co_await conn->fetch_add(
+      seg_rmr.raddr + sizeof(uintptr_t) * kMaxHeight_ + sizeof(uint64_t),
+      seg_rmr.rkey, *start_cnt, 1);
+  // log_info("Start_cnt:%lu", *start_cnt);
+  while ((*start_cnt) < total) {
+    // log_info("Start_cnt:%lu", *start_cnt);
+    co_await conn->read(
+        seg_rmr.raddr + sizeof(uintptr_t) * kMaxHeight_ + sizeof(uint64_t),
+        seg_rmr.rkey, start_cnt, sizeof(uint64_t), lmr->lkey);
+  }
+}
+
+task<> Client::stop() {
+  uint64_t* start_cnt = (uint64_t*)alloc.alloc(sizeof(uint64_t));
+  co_await conn->fetch_add(
+      seg_rmr.raddr + sizeof(uintptr_t) * kMaxHeight_ + sizeof(uint64_t),
+      seg_rmr.rkey, *start_cnt, -1);
+  // log_err("Start_cnt:%lu", *start_cnt);
+  while ((*start_cnt) != 0) {
+    // log_info("Start_cnt:%lu", *start_cnt);
+    co_await conn->read(
+        seg_rmr.raddr + sizeof(uintptr_t) * kMaxHeight_ + sizeof(uint64_t),
+        seg_rmr.rkey, start_cnt, sizeof(uint64_t), lmr->lkey);
+  }
+}
+
+void Client::Node::StashHeight(const uint64_t height) {
   memcpy(static_cast<void*>(&next_[0]), &height, sizeof(height));
 }
 
-uint16_t Client::Node::UnstashHeight() const {
-  uint16_t res;
+uint64_t Client::Node::UnstashHeight() const {
+  uint64_t res;
   memcpy(&res, &next_[0], sizeof(res));
   return res;
 }
 
 uintptr_t Client::GetHead() {
-  return seg_rmr.raddr + sizeof(uint16_t) + sizeof(Node*) * (kMaxHeight_ - 1);
+  return seg_rmr.raddr + sizeof(uint64_t) + sizeof(Node*) * (kMaxHeight_ - 1);
 }
 
-int32_t* Client::Node::Key() const {
-  return const_cast<int32_t*>(reinterpret_cast<const int32_t*>(&next_[1]));
+int64_t* Client::Node::Key() const {
+  return const_cast<int64_t*>(reinterpret_cast<const int64_t*>(&next_[1]));
 }
 
-int32_t* Client::Node::Value() const {
-  return const_cast<int32_t*>(
-      (reinterpret_cast<const int32_t*>(&next_[1]) + 1));
+int64_t* Client::Node::Value() const {
+  return const_cast<int64_t*>(
+      (reinterpret_cast<const int64_t*>(&next_[1]) + 1));
 }
 
-task<int32_t> Client::NodeKey(uintptr_t node) {
-  char* raw = alloc.alloc(sizeof(int32_t));
+task<int64_t> Client::NodeKey(uintptr_t node) {
+  char* raw = alloc.alloc(sizeof(int64_t));
   co_await cli->read(node + sizeof(Node), reinterpret_cast<void*>(raw),
-                     sizeof(int32_t), lmr->lkey);
-  co_return *reinterpret_cast<uint32_t*>(raw);
+                     sizeof(int64_t), lmr->lkey);
+  co_return *reinterpret_cast<int64_t*>(raw);
 }
 
-task<int32_t> Client::NodeValue(uintptr_t node) {
-  char* raw = alloc.alloc(sizeof(int32_t));
-  co_await cli->read(node + sizeof(Node) + sizeof(int32_t),
-                     reinterpret_cast<void*>(raw), sizeof(int32_t), lmr->lkey);
-  co_return *reinterpret_cast<uint32_t*>(raw);
+task<int64_t> Client::NodeValue(uintptr_t node) {
+  char* raw = alloc.alloc(sizeof(int64_t));
+  co_await cli->read(node + sizeof(Node) + sizeof(int64_t),
+                     reinterpret_cast<void*>(raw), sizeof(int64_t), lmr->lkey);
+  co_return *reinterpret_cast<int64_t*>(raw);
 }
 
 task<uintptr_t> Client::NodeNext(uintptr_t node, int n) {
   uintptr_t next = node - sizeof(Node*) * n;
   char* raw = alloc.alloc(sizeof(Node));
-  co_await cli->read(next, reinterpret_cast<void*>(raw), sizeof(Node),
+  co_await cli->read(next, reinterpret_cast<void*>(raw), sizeof(Node*),
                      lmr->lkey);
   co_return *reinterpret_cast<uintptr_t*>(raw);
 }
@@ -129,17 +146,10 @@ task<> Client::NodeSetNext(uintptr_t node, int n, uintptr_t* x) {
 
 task<bool> Client::NodeCASNext(uintptr_t node, int n, uintptr_t expected,
                                uintptr_t* x) {
-  char* raw = alloc.alloc(sizeof(Node*));
-  co_await cli->read(node - sizeof(Node*) * n, raw, sizeof(Node*), lmr->lkey);
-  if (*reinterpret_cast<uintptr_t*>(raw) == expected) {
-    co_await cli->write(node - sizeof(Node*) * n, x, sizeof(Node*), lmr->lkey);
-    co_return true;
-  } else {
-    co_return false;
-  }
+  co_return cli->cas(node - sizeof(Node*) * n, expected, *x);
 }
 
-task<uint16_t> Client::GetMaxHeight(uintptr_t raddr) {
+task<uint64_t> Client::GetMaxHeight(uintptr_t raddr) {
   void* raw = alloc.alloc(sizeof(uint16_t));
   co_await cli->read(raddr, raw, sizeof(uint16_t), lmr->lkey);
   co_return reinterpret_cast<uint16_t>(raw);
@@ -154,14 +164,14 @@ int Client::RandomHeight() {
   return height;
 }
 
-Client::Node* Client::AllocateKeyAndValue(const int32_t key,
-                                          const int32_t value, Client* cli) {
+Client::Node* Client::AllocateKeyAndValue(const int64_t key,
+                                          const int64_t value) {
   return AllocateNode(key, value, RandomHeight());
 }
 
-Client::Node* Client::AllocateNode(const int32_t key, const int32_t value,
+Client::Node* Client::AllocateNode(const int64_t key, const int64_t value,
                                    const int height) {
-  uint32_t pre = sizeof(Node*) * (height - 1);
+  uint64_t pre = sizeof(Node*) * (height - 1);
   char* st = alloc.alloc(pre + sizeof(Node) + sizeof(key) + sizeof(value));
   Node* x = reinterpret_cast<Node*>(st + pre);
   x->StashHeight(height);
@@ -181,21 +191,22 @@ Client::Splice* Client::AllocateSpliceOnHeap() {
   return splice;
 }
 
-bool Client::Equal(const int32_t& a, const int32_t& b) const { return a == b; }
+bool Client::Equal(const int64_t& a, const int64_t& b) const { return a == b; }
 
-bool Client::LessThan(const int32_t& a, const int32_t& b) const {
+bool Client::LessThan(const int64_t& a, const int64_t& b) const {
   return a < b;
 }
 
-task<bool> Client::KeyIsAfterNode(const int32_t key, uintptr_t node) {
+task<bool> Client::KeyIsAfterNode(const int64_t key, uintptr_t node) {
   co_return node != 0 && LessThan(co_await NodeKey(node), key);
 }
 
-task<bool> Client::KeyIsBeforeNode(const int32_t key, uintptr_t node) {
+task<bool> Client::KeyIsBeforeNode(const int64_t key, uintptr_t node) {
   co_return node == 0 || LessThan(key, co_await NodeKey(node));
 }
 
 task<bool> Client::InsertWithHintConcurrently(Node* x, void** hint) {
+  alloc.ReSet(0);
   Splice* splice = reinterpret_cast<Splice*>(*hint);
   if (splice == nullptr) {
     splice = AllocateSpliceOnHeap();
@@ -205,13 +216,18 @@ task<bool> Client::InsertWithHintConcurrently(Node* x, void** hint) {
 }
 
 task<bool> Client::InsertConcurrently(Node* x) {
+  alloc.ReSet(0);
   Splice* splice = AllocateSpliceOnHeap();
   bool bo = co_await Insert(x, splice, false);
   delete[] reinterpret_cast<char*>(splice);
   co_return bo;
 }
 
-task<> Client::FindSpliceForLevel(const int32_t key, uintptr_t before,
+task<bool> Client::Insert(int64_t key, int64_t value) {
+  co_return InsertConcurrently(AllocateKeyAndValue(key, value));
+}
+
+task<> Client::FindSpliceForLevel(const int64_t key, uintptr_t before,
                                   uintptr_t after, int level,
                                   uintptr_t* out_prev, uintptr_t* out_next) {
   while (true) {
@@ -225,7 +241,7 @@ task<> Client::FindSpliceForLevel(const int32_t key, uintptr_t before,
   }
 }
 
-task<> Client::RecomputeSpliceLevels(const int32_t key, Splice* splice,
+task<> Client::RecomputeSpliceLevels(const int64_t key, Splice* splice,
                                      int recompute_level) {
   for (int i = recompute_level - 1; i >= 0; --i) {
     co_await FindSpliceForLevel(key, splice->prev_[i + 1], splice->next_[i + 1],
@@ -236,19 +252,11 @@ task<> Client::RecomputeSpliceLevels(const int32_t key, Splice* splice,
 
 task<bool> Client::Insert(Node* x, Splice* splice,
                           bool allow_partial_splice_fix) {
-  uint16_t height = x->UnstashHeight();
-  uint16_t max_height = co_await GetMaxHeight(seg_rmr.raddr);
+  uint64_t height = x->UnstashHeight();
+  uint64_t max_height = co_await GetMaxHeight(seg_rmr.raddr);
   while (height > max_height) {
-    char* raw = alloc.alloc(sizeof(uint16_t));
-    co_await cli->read(seg_rmr.raddr, raw, sizeof(uint16_t), lmr->lkey);
-    uint16_t h = *reinterpret_cast<uint16_t*>(raw);
-    if (h == max_height) {
-      memcpy(raw, &height, sizeof(uint16_t));
-      co_await cli->write(ralloc.r_start, raw, sizeof(uint16_t), lmr->lkey);
+    if (!co_await cli->cas(seg_rmr.raddr, max_height, height)) {
       max_height = height;
-      break;
-    } else {
-      memcpy(&height, raw, sizeof(uint16_t));
     }
   }
 
@@ -295,9 +303,9 @@ task<bool> Client::Insert(Node* x, Splice* splice,
   }
 
   uintptr_t node = ralloc.alloc(sizeof(Node*) * (height - 1) + sizeof(Node) +
-                                2 * sizeof(int32_t));
+                                2 * sizeof(int64_t));
   co_await cli->write(node + sizeof(Node), x + sizeof(Node),
-                      2 * sizeof(int32_t), lmr->lkey);
+                      2 * sizeof(int64_t), lmr->lkey);
   bool splice_is_vaild = true;
   for (int i = 0; i < height; ++i) {
     while (true) {
@@ -330,7 +338,7 @@ task<bool> Client::Insert(Node* x, Splice* splice,
   co_return true;
 }
 
-task<uintptr_t> Client::FindGreaterOrEqual(const int32_t key) {
+task<uintptr_t> Client::FindGreaterOrEqual(const int64_t key) {
   uintptr_t now = GetHead();
   uintptr_t last_bigger = 0;
   int level = co_await GetMaxHeight(seg_rmr.raddr) - 1;
@@ -349,7 +357,7 @@ task<uintptr_t> Client::FindGreaterOrEqual(const int32_t key) {
   }
 }
 
-task<uintptr_t> Client::Search(const int32_t key) {
+task<uintptr_t> Client::Search(const int64_t key) {
   uintptr_t x = co_await FindGreaterOrEqual(key);
   co_return x != 0 && Equal(co_await NodeKey(x), key) ? x : 0;
 }
