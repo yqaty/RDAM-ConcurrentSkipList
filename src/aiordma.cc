@@ -188,32 +188,33 @@ ibv_mr *rdma_dev::reg_mr(uint32_t mr_id, size_t size, void *buf, int mr_flags) {
   return res;
 }
 
-ibv_dm *rdma_dev::create_dm(size_t size, uint32_t log_align) {
-  ibv_alloc_dm_attr dm_attr = {
-      .length = size, .log_align_req = log_align, .comp_mask = 0};
-  return ibv_alloc_dm(ib_ctx, &dm_attr);
-}
+// ibv_dm *rdma_dev::create_dm(size_t size, uint32_t log_align) {
+//   ibv_alloc_dm_attr dm_attr = {
+//       .length = size, .log_align_req = log_align, .comp_mask = 0};
+//   return ibv_alloc_dm(ib_ctx, &dm_attr);
+// }
 
-rdma_dmmr rdma_dev::create_dmmr(size_t size, uint32_t log_align, int mr_flags) {
-  ibv_dm *dm = create_dm(size, log_align);
-  if (!dm) return {};
-  ibv_mr *mr = ibv_reg_dm_mr(pd, dm, 0, size, mr_flags | IBV_ACCESS_ZERO_BASED);
-  if (!mr) {
-    ibv_free_dm(dm);
-    return {};
-  }
-  return {dm, mr};
-}
+// rdma_dmmr rdma_dev::create_dmmr(size_t size, uint32_t log_align, int
+// mr_flags) {
+//   ibv_dm *dm = create_dm(size, log_align);
+//   if (!dm) return {};
+//   ibv_mr *mr = ibv_reg_dm_mr(pd, dm, 0, size, mr_flags |
+//   IBV_ACCESS_ZERO_BASED); if (!mr) {
+//     ibv_free_dm(dm);
+//     return {};
+//   }
+//   return {dm, mr};
+// }
 
-rdma_dmmr rdma_dev::reg_dmmr(uint32_t mr_id, size_t size, uint32_t log_align,
-                             int mr_flags) {
-  auto [dm, mr] = create_dmmr(size, log_align, mr_flags);
-  if (mr && !reg_mr(mr_id, mr)) {
-    rdma_free_dmmr({dm, mr});
-    return {};
-  }
-  return {dm, mr};
-}
+// rdma_dmmr rdma_dev::reg_dmmr(uint32_t mr_id, size_t size, uint32_t log_align,
+//                              int mr_flags) {
+//   auto [dm, mr] = create_dmmr(size, log_align, mr_flags);
+//   if (mr && !reg_mr(mr_id, mr)) {
+//     rdma_free_dmmr({dm, mr});
+//     return {};
+//   }
+//   return {dm, mr};
+// }
 
 #ifdef ENABLE_DOCA_DMA
 void rdma_dev::enable_dma(const char *dev_name) {

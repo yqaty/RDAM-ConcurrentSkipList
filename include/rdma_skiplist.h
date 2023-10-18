@@ -148,7 +148,7 @@ class Server : public BasicDB {
   rdma_dev dev;
   rdma_server ser;
   struct ibv_mr* seg_mr;
-  ibv_dm* lock_dm;  // Locks for Segments
+  // ibv_dm* lock_dm;  // Locks for Segments
   ibv_mr* lock_mr;
   char* mem_buf;
 
