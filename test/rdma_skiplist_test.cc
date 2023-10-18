@@ -152,14 +152,13 @@ int main(int argc, char *argv[]) {
   load_num = config.load_num;
   if (config.is_server) {
     ServerType ser(config);
-    printf("server stopped!\n");
-    // while (true)
-    //   ;
+    while (true)
+      ;
   } else {
     uint64_t cbuf_size = (1ul << 20) * 20;
     char *mem_buf =
         (char *)malloc(cbuf_size * (config.num_cli * config.num_coro + 1));
-    rdma_dev dev("ens33", 1, config.roce_flag);
+    rdma_dev dev("rxe0", 1, config.roce_flag);
     std::vector<ibv_mr *> lmrs(config.num_cli * config.num_coro + 1, nullptr);
     std::vector<rdma_client *> rdma_clis(config.num_cli + 1, nullptr);
     std::vector<rdma_conn *> rdma_conns(config.num_cli + 1, nullptr);
