@@ -170,6 +170,7 @@ int main(int argc, char *argv[]) {
     for (uint64_t i = 0; i < config.num_cli; i++) {
       rdma_clis[i] = new rdma_client(dev, so_qp_cap, rdma_default_tempmp_size,
                                      config.max_coro, config.cq_size);
+      //printf("num_cli:%d\n",i);
       rdma_conns[i] = rdma_clis[i]->connect(config.server_ip);
       assert(rdma_conns[i] != nullptr);
       rdma_wowait_conns[i] = rdma_clis[i]->connect(config.server_ip);
