@@ -67,8 +67,8 @@ class Client : public BasicDB {
 
   uintptr_t GetHead();
 
-  Client::Node* Client::AllocateNode(const int64_t key, const int64_t value,
-                                     const int height);
+  Client::Node* AllocateNode(const int64_t key, const int64_t value,
+                             const int height);
 
   task<uintptr_t> NodeNext(uintptr_t node, int n);
 

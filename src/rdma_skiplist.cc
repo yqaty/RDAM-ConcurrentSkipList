@@ -146,13 +146,13 @@ task<> Client::NodeSetNext(uintptr_t node, int n, uintptr_t* x) {
 
 task<bool> Client::NodeCASNext(uintptr_t node, int n, uintptr_t expected,
                                uintptr_t* x) {
-  co_return cli->cas(node - sizeof(Node*) * n, expected, *x);
+  co_return co_await cli->cas(node - sizeof(Node*) * n, expected, *x);
 }
 
 task<uint64_t> Client::GetMaxHeight(uintptr_t raddr) {
-  void* raw = alloc.alloc(sizeof(uint16_t));
-  co_await cli->read(raddr, raw, sizeof(uint16_t), lmr->lkey);
-  co_return reinterpret_cast<uint16_t>(raw);
+  void* raw = alloc.alloc(sizeof(uint64_t));
+  co_await cli->read(raddr, raw, sizeof(uint64_t), lmr->lkey);
+  co_return *reinterpret_cast<uint64_t*>(raw);
 }
 
 int Client::RandomHeight() {
@@ -212,7 +212,7 @@ task<bool> Client::InsertWithHintConcurrently(Node* x, void** hint) {
     splice = AllocateSpliceOnHeap();
     *hint = reinterpret_cast<void*>(splice);
   }
-  co_return Insert(x, splice, true);
+  co_return co_await Insert(x, splice, true);
 }
 
 task<bool> Client::InsertConcurrently(Node* x) {
@@ -224,7 +224,7 @@ task<bool> Client::InsertConcurrently(Node* x) {
 }
 
 task<bool> Client::Insert(int64_t key, int64_t value) {
-  co_return InsertConcurrently(AllocateKeyAndValue(key, value));
+  co_return co_await InsertConcurrently(AllocateKeyAndValue(key, value));
 }
 
 task<> Client::FindSpliceForLevel(const int64_t key, uintptr_t before,
@@ -299,7 +299,7 @@ task<bool> Client::Insert(Node* x, Splice* splice,
     }
   }
   if (recompute_height > 0) {
-    RecomputeSpliceLevels(*x->Key(), splice, recompute_height);
+    co_await RecomputeSpliceLevels(*x->Key(), splice, recompute_height);
   }
 
   uintptr_t node = ralloc.alloc(sizeof(Node*) * (height - 1) + sizeof(Node) +
@@ -365,7 +365,7 @@ task<uintptr_t> Client::Search(const int64_t key) {
 task<> Client::Print() {
   uintptr_t now = co_await NodeNext(GetHead(), 0);
   while (now != 0) {
-    printf("%d %d\n", NodeKey(now), NodeValue(now));
+    printf("%ld %ld\n", co_await NodeKey(now), co_await NodeValue(now));
     now = co_await NodeNext(now, 0);
   }
   putchar('\n');
