@@ -9,7 +9,7 @@ Server::Server(Config& config) : dev(nullptr, 1, config.roce_flag), ser(dev) {
   seg_mr = dev.reg_mr(233, config.mem_size);
   alloc.Set((char*)seg_mr->addr, seg_mr->length);
   Init();
-  log_err("init");
+  //log_err("init");
   ser.start_serve();
 }
 
