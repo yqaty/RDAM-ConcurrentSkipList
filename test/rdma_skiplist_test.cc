@@ -155,7 +155,7 @@ int main(int argc, char *argv[]) {
     while (true)
       ;
   } else {
-    uint64_t cbuf_size = (1ul << 20) * 200;
+    uint64_t cbuf_size = (1ul << 20) * 50;
     char *mem_buf =
         (char *)malloc(cbuf_size * (config.num_cli * config.num_coro + 1));
     rdma_dev dev("ens33", 1, config.roce_flag);
@@ -240,6 +240,7 @@ int main(int argc, char *argv[]) {
         std::chrono::duration<double, std::milli>(end - start).count();
     printf("Load duration:%.2lfms\n", duration);
     printf("Load IOPS:%.2lfKops\n", op_cnt / duration);
+    rdma_clis[0]->run(clis[0]->Print());
     fflush(stdout);
     // ths[config.num_cli].join();
 
