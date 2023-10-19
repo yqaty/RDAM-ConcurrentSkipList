@@ -185,7 +185,7 @@ Client::Node* Client::AllocateNode(const int64_t key, const int64_t value,
 
 Client::Splice* Client::AllocateSpliceOnHeap() {
   size_t array_siz = sizeof(uintptr_t) * (kMaxHeight_ + 1);
-  char* raw = new char[sizeof(Splice) + 2 * array_siz];
+  char* raw = alloc.alloc(sizeof(Splice) + 2 * array_siz);
   Splice* splice = reinterpret_cast<Splice*>(raw);
   splice->height_ = 0;
   splice->prev_ = reinterpret_cast<uintptr_t*>(raw + sizeof(Splice));
@@ -209,7 +209,6 @@ task<bool> Client::KeyIsBeforeNode(const int64_t key, uintptr_t node) {
 }
 
 task<bool> Client::InsertWithHintConcurrently(Node* x, void** hint) {
-  alloc.ReSet(0);
   Splice* splice = reinterpret_cast<Splice*>(*hint);
   if (splice == nullptr) {
     splice = AllocateSpliceOnHeap();
@@ -219,7 +218,6 @@ task<bool> Client::InsertWithHintConcurrently(Node* x, void** hint) {
 }
 
 task<bool> Client::InsertConcurrently(Node* x) {
-  alloc.ReSet(0);
   Splice* splice = AllocateSpliceOnHeap();
   bool bo = co_await Insert(x, splice, false);
   delete[] reinterpret_cast<char*>(splice);
@@ -227,6 +225,7 @@ task<bool> Client::InsertConcurrently(Node* x) {
 }
 
 task<bool> Client::Insert(int64_t key, int64_t value) {
+  alloc.ReSet(0);
   co_return co_await InsertConcurrently(AllocateKeyAndValue(key, value));
 }
 
@@ -371,6 +370,7 @@ task<> Client::Print() {
   while (now != 0) {
     printf("%ld %ld\n", co_await NodeKey(now), co_await NodeValue(now));
     now = co_await NodeNext(now, 0);
+    alloc.ReSet(0);
   }
   putchar('\n');
 }
