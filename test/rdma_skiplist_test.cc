@@ -158,7 +158,7 @@ int main(int argc, char *argv[]) {
     uint64_t cbuf_size = (1ul << 20) * 20;
     char *mem_buf =
         (char *)malloc(cbuf_size * (config.num_cli * config.num_coro + 1));
-    rdma_dev dev("rxe0", 1, config.roce_flag);
+    rdma_dev dev("mlx5_0", 1, config.roce_flag);
     std::vector<ibv_mr *> lmrs(config.num_cli * config.num_coro + 1, nullptr);
     std::vector<rdma_client *> rdma_clis(config.num_cli + 1, nullptr);
     std::vector<rdma_conn *> rdma_conns(config.num_cli + 1, nullptr);
@@ -170,7 +170,7 @@ int main(int argc, char *argv[]) {
     for (uint64_t i = 0; i < config.num_cli; i++) {
       rdma_clis[i] = new rdma_client(dev, so_qp_cap, rdma_default_tempmp_size,
                                      config.max_coro, config.cq_size);
-      //printf("num_cli:%d\n",i);
+      // printf("num_cli:%d\n",i);
       rdma_conns[i] = rdma_clis[i]->connect(config.server_ip);
       assert(rdma_conns[i] != nullptr);
       rdma_wowait_conns[i] = rdma_clis[i]->connect(config.server_ip);

@@ -41,7 +41,7 @@ struct Config {
     cmd_parser.add<uint64_t>("cq_size", 'g', "size of complete queue", false,
                              64);
     cmd_parser.add<uint64_t>("mem_size", 'i', "size of pm_file", false,
-                             (1ul << 20)*50 );
+                             (1ul << 30));
     cmd_parser.add<uint64_t>("num_op", 'j',
                              "Number of inserted key by every thread", false,
                              1000000);
