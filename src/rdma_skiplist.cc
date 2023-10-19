@@ -105,7 +105,8 @@ uint64_t Client::Node::UnstashHeight() const {
 }
 
 uintptr_t Client::GetHead() {
-  return seg_rmr.raddr + sizeof(uint64_t) + sizeof(Node*) * (kMaxHeight_ - 1);
+  return seg_rmr.raddr + sizeof(uint64_t) +
+         sizeof(uintptr_t) * (kMaxHeight_ - 1);
 }
 
 int64_t* Client::Node::Key() const {
@@ -132,21 +133,22 @@ task<int64_t> Client::NodeValue(uintptr_t node) {
 }
 
 task<uintptr_t> Client::NodeNext(uintptr_t node, int n) {
-  uintptr_t next = node - sizeof(Node*) * n;
-  char* raw = alloc.alloc(sizeof(Node));
-  co_await cli->read(next, reinterpret_cast<void*>(raw), sizeof(Node*),
+  uintptr_t next = node - sizeof(uintptr_t) * n;
+  char* raw = alloc.alloc(sizeof(uintptr_t));
+  co_await cli->read(next, reinterpret_cast<void*>(raw), sizeof(uintptr_t),
                      lmr->lkey);
   co_return *reinterpret_cast<uintptr_t*>(raw);
 }
 
 task<> Client::NodeSetNext(uintptr_t node, int n, uintptr_t* x) {
-  co_await cli->write(node - sizeof(Node*) * n, x, sizeof(Node*), lmr->lkey);
+  co_await cli->write(node - sizeof(uintptr_t) * n, x, sizeof(uintptr_t),
+                      lmr->lkey);
   co_return;
 }
 
 task<bool> Client::NodeCASNext(uintptr_t node, int n, uintptr_t expected,
                                uintptr_t* x) {
-  co_return co_await cli->cas(node - sizeof(Node*) * n, expected, *x);
+  co_return co_await cli->cas(node - sizeof(uintptr_t) * n, expected, *x);
 }
 
 task<uint64_t> Client::GetMaxHeight(uintptr_t raddr) {
@@ -171,7 +173,7 @@ Client::Node* Client::AllocateKeyAndValue(const int64_t key,
 
 Client::Node* Client::AllocateNode(const int64_t key, const int64_t value,
                                    const int height) {
-  uint64_t pre = sizeof(Node*) * (height - 1);
+  uint64_t pre = sizeof(uintptr_t) * (height - 1);
   char* st = alloc.alloc(pre + sizeof(Node) + sizeof(key) + sizeof(value));
   Node* x = reinterpret_cast<Node*>(st + pre);
   x->StashHeight(height);
@@ -181,7 +183,7 @@ Client::Node* Client::AllocateNode(const int64_t key, const int64_t value,
 }
 
 Client::Splice* Client::AllocateSpliceOnHeap() {
-  size_t array_siz = sizeof(Node*) * (kMaxHeight_ + 1);
+  size_t array_siz = sizeof(uintptr_t) * (kMaxHeight_ + 1);
   char* raw = new char[sizeof(Splice) + 2 * array_siz];
   Splice* splice = reinterpret_cast<Splice*>(raw);
   splice->height_ = 0;
@@ -302,8 +304,8 @@ task<bool> Client::Insert(Node* x, Splice* splice,
     co_await RecomputeSpliceLevels(*x->Key(), splice, recompute_height);
   }
 
-  uintptr_t node = ralloc.alloc(sizeof(Node*) * (height - 1) + sizeof(Node) +
-                                2 * sizeof(int64_t));
+  uintptr_t node = ralloc.alloc(sizeof(uintptr_t) * (height - 1) +
+                                sizeof(Node) + 2 * sizeof(int64_t));
   co_await cli->write(node + sizeof(Node), x + sizeof(Node),
                       2 * sizeof(int64_t), lmr->lkey);
   bool splice_is_vaild = true;
