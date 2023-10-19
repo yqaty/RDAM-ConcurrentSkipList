@@ -8,6 +8,8 @@ namespace SKIPLIST {
 Server::Server(Config& config) : dev("mlx5_0", 1, config.roce_flag), ser(dev) {
   seg_mr = dev.reg_mr(233, config.mem_size);
   alloc.Set((char*)seg_mr->addr, seg_mr->length);
+  log_err("%lu~%lu\n", (uintptr_t)seg_mr->addr,
+          (uintptr_t)seg_mr->addr + seg_mr->length);
   Init();
   // log_err("init");
   ser.start_serve();
@@ -51,6 +53,8 @@ Client::Client(Config& config, ibv_mr* _lmr, rdma_client* _cli,
       seg_rmr.raddr + seg_rmr.rlen - rbuf_size * buf_id;  // 从尾部开始分配
   ralloc.SetRemote(remote_ptr, rbuf_size, seg_rmr.raddr, seg_rmr.rlen);
   ralloc.alloc(ALIGNED_SIZE);  // 提前分配ALIGNED_SIZE，免得读取的时候越界
+  log_err("%lu~%lu\n", (uintptr_t)lmr->addr,
+          (uintptr_t)lmr->addr + lmr->length);
   // log_err("ralloc start_addr:%lx offset_max:%lx", ralloc.raddr,
   // ralloc.rsize);
 
@@ -367,6 +371,7 @@ task<uintptr_t> Client::Search(const int64_t key) {
 task<> Client::Print() {
   uintptr_t now = co_await NodeNext(GetHead(), 0);
   while (now != 0) {
+    log_err("now=%lu\n", now);
     printf("%ld %ld\n", co_await NodeKey(now), co_await NodeValue(now));
     now = co_await NodeNext(now, 0);
     alloc.ReSet(0);
