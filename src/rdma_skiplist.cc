@@ -121,6 +121,7 @@ int64_t* Client::Node::Value() {
 
 task<int64_t> Client::NodeKey(uintptr_t node) {
   char* raw = alloc.alloc(sizeof(int64_t));
+  log_err("nodekey=%lu\n", node + sizeof(Node));
   co_await cli->read(node + sizeof(Node), reinterpret_cast<void*>(raw),
                      sizeof(int64_t), lmr->lkey);
   co_return *reinterpret_cast<int64_t*>(raw);
