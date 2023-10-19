@@ -220,7 +220,6 @@ task<bool> Client::InsertWithHintConcurrently(Node* x, void** hint) {
 task<bool> Client::InsertConcurrently(Node* x) {
   Splice* splice = AllocateSpliceOnHeap();
   bool bo = co_await Insert(x, splice, false);
-  delete[] reinterpret_cast<char*>(splice);
   co_return bo;
 }
 
