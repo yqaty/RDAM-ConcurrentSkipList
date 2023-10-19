@@ -325,6 +325,9 @@ task<bool> Client::Insert(Node* x, Splice* splice,
       }
       co_await NodeSetNext(node, i, splice->next_[i]);
       if (co_await NodeCASNext(splice->prev_[i], i, splice->next_[i], node)) {
+        log_err("i=%d,prev_=%lu,next_=%lu,node=%lu,prev_next=%lu\n", i,
+                splice->prev_[i], splice->next_[i], node,
+                co_await NodeNext(splice->prev_[i], 0));
         break;
       }
       co_await FindSpliceForLevel(*x->Key(), splice->prev_[i], 0, i,
