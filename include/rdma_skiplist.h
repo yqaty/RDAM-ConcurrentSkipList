@@ -129,9 +129,9 @@ struct Client::Node {
 
   uint64_t UnstashHeight() const;
 
-  int64_t* Key() const;
+  int64_t* Key();
 
-  int64_t* Value() const;
+  int64_t* Value();
 
  private:
   uintptr_t next_[1];

@@ -109,13 +109,10 @@ uintptr_t Client::GetHead() {
          sizeof(uintptr_t) * (kMaxHeight_ - 1);
 }
 
-int64_t* Client::Node::Key() const {
-  return const_cast<int64_t*>(reinterpret_cast<const int64_t*>(&next_[1]));
-}
+int64_t* Client::Node::Key() { return reinterpret_cast<int64_t*>(&next_[1]); }
 
-int64_t* Client::Node::Value() const {
-  return const_cast<int64_t*>(
-      (reinterpret_cast<const int64_t*>(&next_[1]) + 1));
+int64_t* Client::Node::Value() {
+  return reinterpret_cast<int64_t*>(&next_[1] + 1);
 }
 
 task<int64_t> Client::NodeKey(uintptr_t node) {
