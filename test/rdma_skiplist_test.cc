@@ -34,7 +34,7 @@ task<> load(Client *cli, uint64_t cli_id, uint64_t coro_id) {
                     cli_id * config.num_coro + coro_id) *
                        num_op +
                    i);
-    log_err("key=%ld,value=%ld\n", key, value);
+    // log_err("key=%ld,value=%ld\n", key, value);
     co_await cli->Insert(key + 1, value + 1);
   }
   co_await cli->stop();
