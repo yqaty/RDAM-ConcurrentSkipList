@@ -51,12 +51,12 @@ struct Config {
                              cmdline::range(0, 10));
     cmd_parser.add<uint64_t>("pattern_type", 'm', "pattern_type", false, 0,
                              cmdline::range(0, 3));
-    cmd_parser.add<double>("insert_frac", 'n', "insert_frac", false, 1.0);
-    cmd_parser.add<double>("read_frac", 'o', "read_frac", false, 0.0);
+    cmd_parser.add<double>("insert_frac", 'n', "insert_frac", false, 0.0);
+    cmd_parser.add<double>("read_frac", 'o', "read_frac", false, 1.0);
     cmd_parser.add<double>("update_frac", 'p', "update_frac", false, 0.0);
     cmd_parser.add<double>("delete_frac", 'q', "delete_frac", false, 0.0);
     cmd_parser.add<uint64_t>("read_size", 'r', "read_size", false, 64);
-    cmd_parser.add<uint64_t>("load_num", 's', "load_num", false, 10000);
+    cmd_parser.add<uint64_t>("load_num", 's', "load_num", false, 100000);
 
     cmd_parser.parse_check(argc, argv);
 
