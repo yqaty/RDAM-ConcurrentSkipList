@@ -313,12 +313,12 @@ task<bool> Client::Insert(Node* x, Splice* splice,
   bool splice_is_vaild = true;
   for (int i = 0; i < height; ++i) {
     while (true) {
-      if (UNLIKELY(i == 0 && splice->prev_[0] != GetHead() &&
-                   (!co_await KeyIsAfterNode(*x->Key(), splice->prev_[0])))) {
+      if (i == 0 && splice->prev_[0] != GetHead() &&
+          (!co_await KeyIsAfterNode(*x->Key(), splice->prev_[0]))) {
         co_return false;
       }
-      if (UNLIKELY(i == 0 && splice->next_[0] != 0 &&
-                   (!co_await KeyIsBeforeNode(*x->Key(), splice->next_[0])))) {
+      if (i == 0 && splice->next_[0] != 0 &&
+          (!co_await KeyIsBeforeNode(*x->Key(), splice->next_[0]))) {
         co_return false;
       }
       co_await NodeSetNext(node, i, splice->next_[i]);
