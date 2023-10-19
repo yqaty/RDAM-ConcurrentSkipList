@@ -313,10 +313,9 @@ task<bool> Client::Insert(Node* x, Splice* splice,
                    sizeof(uintptr_t) * (height - 1);
   co_await cli->write(node + sizeof(Node), x + sizeof(Node),
                       2 * sizeof(int64_t), lmr->lkey);
-  log_err(
-      "nodekey=%ld,"
-      "nodevalue:%ld,xkey=%ld,xvalue:%ld\n",
-      co_await NodeKey(node), co_await NodeValue(node), *x->Key(), *x->Value());
+  log_err("node=%lu,nodekey=%ld,nodevalue:%ld,xkey=%ld,xvalue:%ld\n", node,
+          co_await NodeKey(node), co_await NodeValue(node), *x->Key(),
+          *x->Value());
   bool splice_is_vaild = true;
   for (int i = 0; i < height; ++i) {
     while (true) {
