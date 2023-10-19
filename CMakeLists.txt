@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.2)
-#SET(CMAKE_CXX_COMPILER "/usr/bin/g++-11")
+SET(CMAKE_CXX_COMPILER "/usr/bin/g++-11")
 project(MyIndex)
 # set(CMAKE_CXX_FLAGS "-g -O0") # -DENABLE_HUGEPAGE
 set(CMAKE_CXX_FLAGS "-O3") # -DENABLE_HUGEPAGE
