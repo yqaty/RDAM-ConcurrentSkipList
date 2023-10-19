@@ -8,10 +8,10 @@ namespace SKIPLIST {
 Server::Server(Config& config) : dev("mlx5_0", 1, config.roce_flag), ser(dev) {
   seg_mr = dev.reg_mr(233, config.mem_size);
   alloc.Set((char*)seg_mr->addr, seg_mr->length);
-  log_err("%lu~%lu\n", (uintptr_t)seg_mr->addr,
-          (uintptr_t)seg_mr->addr + seg_mr->length);
+  // log_err("%lu~%lu\n", (uintptr_t)seg_mr->addr,
+  //        (uintptr_t)seg_mr->addr + seg_mr->length);
   Init();
-  // log_err("init");
+  log_err("init");
   ser.start_serve();
 }
 
@@ -53,10 +53,10 @@ Client::Client(Config& config, ibv_mr* _lmr, rdma_client* _cli,
       seg_rmr.raddr + seg_rmr.rlen - rbuf_size * buf_id;  // 从尾部开始分配
   ralloc.SetRemote(remote_ptr, rbuf_size, seg_rmr.raddr, seg_rmr.rlen);
   ralloc.alloc(ALIGNED_SIZE);  // 提前分配ALIGNED_SIZE，免得读取的时候越界
-  log_err("%lu~%lu\n", (uintptr_t)lmr->addr,
-          (uintptr_t)lmr->addr + lmr->length);
-  // log_err("ralloc start_addr:%lx offset_max:%lx", ralloc.raddr,
-  // ralloc.rsize);
+  // log_err("%lu~%lu\n", (uintptr_t)lmr->addr,
+  //         (uintptr_t)lmr->addr + lmr->length);
+  //  log_err("ralloc start_addr:%lx offset_max:%lx", ralloc.raddr,
+  //  ralloc.rsize);
 
   // util variable
   op_cnt = 0;
@@ -121,7 +121,7 @@ int64_t* Client::Node::Value() {
 
 task<int64_t> Client::NodeKey(uintptr_t node) {
   char* raw = alloc.alloc(sizeof(int64_t));
-  log_err("nodekey=%lu\n", node + sizeof(Node));
+  // log_err("nodekey=%lu\n", node + sizeof(Node));
   co_await cli->read(node + sizeof(Node), reinterpret_cast<void*>(raw),
                      sizeof(int64_t), lmr->lkey);
   co_return *reinterpret_cast<int64_t*>(raw);
@@ -313,9 +313,9 @@ task<bool> Client::Insert(Node* x, Splice* splice,
                    sizeof(uintptr_t) * (height - 1);
   co_await cli->write(node + sizeof(Node), reinterpret_cast<void*>(x + 1),
                       2 * sizeof(int64_t), lmr->lkey);
-  log_err("node=%lu,nodekey=%ld,nodevalue:%ld,xkey=%ld,xvalue:%ld\n", node,
-          co_await NodeKey(node), co_await NodeValue(node), *x->Key(),
-          *x->Value());
+  // log_err("node=%lu,nodekey=%ld,nodevalue:%ld,xkey=%ld,xvalue:%ld\n", node,
+  //  co_await NodeKey(node), co_await NodeValue(node), *x->Key(),
+  //  *x->Value());
   bool splice_is_vaild = true;
   for (int i = 0; i < height; ++i) {
     while (true) {
@@ -329,12 +329,12 @@ task<bool> Client::Insert(Node* x, Splice* splice,
       }
       co_await NodeSetNext(node, i, splice->next_[i]);
       if (co_await NodeCASNext(splice->prev_[i], i, splice->next_[i], node)) {
-        log_err(
-            "i=%d,prev_=%lu,next_=%lu,node=%lu,prev_next=%lu,nodekey=%ld,"
-            "nodevalue:%ld,xkey=%ld,xvalue:%ld\n",
-            i, splice->prev_[i], splice->next_[i], node,
-            co_await NodeNext(splice->prev_[i], 0), co_await NodeKey(node),
-            co_await NodeValue(node), *x->Key(), *x->Value());
+        // log_err(
+        //  "i=%d,prev_=%lu,next_=%lu,node=%lu,prev_next=%lu,nodekey=%ld,"
+        //  "nodevalue:%ld,xkey=%ld,xvalue:%ld\n",
+        //  i, splice->prev_[i], splice->next_[i], node,
+        //  co_await NodeNext(splice->prev_[i], 0), co_await NodeKey(node),
+        //  co_await NodeValue(node), *x->Key(), *x->Value());
         break;
       }
       co_await FindSpliceForLevel(*x->Key(), splice->prev_[i], 0, i,
@@ -381,7 +381,7 @@ task<uintptr_t> Client::Search(const int64_t key) {
 task<> Client::Print() {
   uintptr_t now = co_await NodeNext(GetHead(), 0);
   while (now != 0) {
-    log_err("now=%lu\n", now);
+    // log_err("now=%lu\n", now);
     printf("%ld %ld\n", co_await NodeKey(now), co_await NodeValue(now));
     now = co_await NodeNext(now, 0);
     alloc.ReSet(0);
