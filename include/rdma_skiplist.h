@@ -61,7 +61,7 @@ class Client : public BasicDB {
   task<> Print();
 
  private:
-  task<uint64_t> GetMaxHeight(uintptr_t raddr);
+  task<uint64_t*> GetMaxHeight(uintptr_t raddr);
 
   int RandomHeight();
 
@@ -72,10 +72,10 @@ class Client : public BasicDB {
 
   task<uintptr_t> NodeNext(uintptr_t node, int n);
 
-  task<> NodeSetNext(uintptr_t node, int n, uintptr_t* x);
+  task<> NodeSetNext(uintptr_t node, int n, uintptr_t x);
 
   task<bool> NodeCASNext(uintptr_t node, int n, uintptr_t expected,
-                         uintptr_t* x);
+                         uintptr_t x);
 
   bool Equal(const int64_t& a, const int64_t& b) const;
 

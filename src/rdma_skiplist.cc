@@ -140,21 +140,25 @@ task<uintptr_t> Client::NodeNext(uintptr_t node, int n) {
   co_return *reinterpret_cast<uintptr_t*>(raw);
 }
 
-task<> Client::NodeSetNext(uintptr_t node, int n, uintptr_t* x) {
-  co_await cli->write(node - sizeof(uintptr_t) * n, x, sizeof(uintptr_t),
+task<> Client::NodeSetNext(uintptr_t node, int n, uintptr_t x) {
+  uintptr_t* raw = reinterpret_cast<uintptr_t*>(alloc.alloc(sizeof(uintptr_t)));
+  *raw = x;
+  co_await cli->write(node - sizeof(uintptr_t) * n, raw, sizeof(uintptr_t),
                       lmr->lkey);
   co_return;
 }
 
 task<bool> Client::NodeCASNext(uintptr_t node, int n, uintptr_t expected,
-                               uintptr_t* x) {
-  co_return co_await cli->cas(node - sizeof(uintptr_t) * n, expected, *x);
+                               uintptr_t x) {
+  uintptr_t* raw = reinterpret_cast<uintptr_t*>(alloc.alloc(sizeof(uintptr_t)));
+  *raw = expected;
+  co_return co_await cli->cas(node - sizeof(uintptr_t) * n, *raw, x);
 }
 
-task<uint64_t> Client::GetMaxHeight(uintptr_t raddr) {
+task<uint64_t*> Client::GetMaxHeight(uintptr_t raddr) {
   void* raw = alloc.alloc(sizeof(uint64_t));
   co_await cli->read(raddr, raw, sizeof(uint64_t), lmr->lkey);
-  co_return *reinterpret_cast<uint64_t*>(raw);
+  co_return reinterpret_cast<uint64_t*>(raw);
 }
 
 int Client::RandomHeight() {
@@ -255,21 +259,21 @@ task<> Client::RecomputeSpliceLevels(const int64_t key, Splice* splice,
 task<bool> Client::Insert(Node* x, Splice* splice,
                           bool allow_partial_splice_fix) {
   uint64_t height = x->UnstashHeight();
-  uint64_t max_height = co_await GetMaxHeight(seg_rmr.raddr);
-  while (height > max_height) {
-    if (!co_await cli->cas(seg_rmr.raddr, max_height, height)) {
-      max_height = height;
+  uint64_t* max_height = co_await GetMaxHeight(seg_rmr.raddr);
+  while (height > *max_height) {
+    if (!co_await cli->cas(seg_rmr.raddr, *max_height, height)) {
+      *max_height = height;
     }
   }
 
   int recompute_height = 0;
-  if (splice->height_ < max_height) {
-    splice->height_ = max_height;
-    recompute_height = max_height;
-    splice->prev_[max_height] = GetHead();
-    splice->next_[max_height] = 0;
+  if (splice->height_ < *max_height) {
+    splice->height_ = *max_height;
+    recompute_height = *max_height;
+    splice->prev_[*max_height] = GetHead();
+    splice->next_[*max_height] = 0;
   } else {
-    while (recompute_height < max_height) {
+    while (recompute_height < *max_height) {
       if (co_await NodeNext(splice->prev_[recompute_height],
                             recompute_height) !=
           splice->next_[recompute_height]) {
@@ -283,7 +287,7 @@ task<bool> Client::Insert(Node* x, Splice* splice,
             ++recompute_height;
           }
         } else {
-          recompute_height = max_height;
+          recompute_height = *max_height;
         }
       } else if (co_await KeyIsAfterNode(*x->Key(),
                                          splice->next_[recompute_height])) {
@@ -293,7 +297,7 @@ task<bool> Client::Insert(Node* x, Splice* splice,
             ++recompute_height;
           }
         } else {
-          recompute_height = max_height;
+          recompute_height = *max_height;
         }
       } else {
         break;
@@ -305,7 +309,8 @@ task<bool> Client::Insert(Node* x, Splice* splice,
   }
 
   uintptr_t node = ralloc.alloc(sizeof(uintptr_t) * (height - 1) +
-                                sizeof(Node) + 2 * sizeof(int64_t));
+                                sizeof(Node) + 2 * sizeof(int64_t)) +
+                   sizeof(uintptr_t) * (height - 1);
   co_await cli->write(node + sizeof(Node), x + sizeof(Node),
                       2 * sizeof(int64_t), lmr->lkey);
   bool splice_is_vaild = true;
@@ -319,8 +324,8 @@ task<bool> Client::Insert(Node* x, Splice* splice,
                    (!co_await KeyIsBeforeNode(*x->Key(), splice->next_[0])))) {
         co_return false;
       }
-      co_await NodeSetNext(node, i, &splice->next_[i]);
-      if (co_await NodeCASNext(splice->prev_[i], i, splice->next_[i], &node)) {
+      co_await NodeSetNext(node, i, splice->next_[i]);
+      if (co_await NodeCASNext(splice->prev_[i], i, splice->next_[i], node)) {
         break;
       }
       co_await FindSpliceForLevel(*x->Key(), splice->prev_[i], 0, i,
@@ -343,7 +348,7 @@ task<bool> Client::Insert(Node* x, Splice* splice,
 task<uintptr_t> Client::FindGreaterOrEqual(const int64_t key) {
   uintptr_t now = GetHead();
   uintptr_t last_bigger = 0;
-  int level = co_await GetMaxHeight(seg_rmr.raddr) - 1;
+  int level = *co_await GetMaxHeight(seg_rmr.raddr) - 1;
   while (true) {
     uintptr_t next = co_await NodeNext(now, level);
     if (next == 0 || next == last_bigger ||
