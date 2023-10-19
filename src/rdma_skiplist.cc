@@ -311,7 +311,7 @@ task<bool> Client::Insert(Node* x, Splice* splice,
   uintptr_t node = ralloc.alloc(sizeof(uintptr_t) * (height - 1) +
                                 sizeof(Node) + 2 * sizeof(int64_t)) +
                    sizeof(uintptr_t) * (height - 1);
-  co_await cli->write(node + sizeof(Node), x + sizeof(Node),
+  co_await cli->write(node + sizeof(Node), reinterpret_cast<void*>(x + 1),
                       2 * sizeof(int64_t), lmr->lkey);
   log_err("node=%lu,nodekey=%ld,nodevalue:%ld,xkey=%ld,xvalue:%ld\n", node,
           co_await NodeKey(node), co_await NodeValue(node), *x->Key(),
